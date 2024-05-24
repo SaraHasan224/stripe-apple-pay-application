@@ -1,12 +1,33 @@
-// This is your test secret API key.
-const stripe = require("stripe")(process.env.STRIPE_KEY);
 const express = require("express");
 const app = express();
+// Load environment variables from .env file
+require("dotenv").config();
 app.use(express.static("public"));
+// set the view engine to ejs
+app.set("view engine", "ejs");
+app.set("views", __dirname + "/views");
+
+// checkout page
+app.get("/", function (req, res) {
+  res.render("pages/checkout", { appUrl: process.env.APP_URL });
+});
+
+// success page
+app.get("/success", function (req, res) {
+  res.render("pages/success");
+});
+
+// cancel page
+app.get("/cancel", function (req, res) {
+  res.render("pages/cancel");
+});
 
 app.post("/create-checkout-session", async (req, res) => {
   let price;
+  // This is your test secret API key.
+  const stripe = require("stripe")(process.env.STRIPE_KEY);
   (async () => {
+    console.log("stripe key: ", process.env.STRIPE_KEY);
     const product = await stripe.products.create({
       name: "Product Name",
     });
@@ -27,9 +48,9 @@ app.post("/create-checkout-session", async (req, res) => {
           quantity: 5,
         },
       ],
-      mode: "subscription",
-      success_url: process.env.APP_URL + `/success.html`,
-      cancel_url: process.env.APP_URL + `/cancel.html`,
+      mode: "payment",
+      success_url: process.env.APP_URL + `success`,
+      cancel_url: process.env.APP_URL + `cancel`,
       automatic_tax: { enabled: true },
     });
     console.log("session: ", session);
@@ -37,17 +58,16 @@ app.post("/create-checkout-session", async (req, res) => {
   })();
 });
 
-// This is your Stripe CLI webhook secret for testing your endpoint locally.
-const endpointSecret =
-  "whsec_078b9815d705873a4072adbd0603190a6281a3746048b6a6e8c74ee09242c19a";
-
 app.post(
-  "/new-webhook",
+  "/webhook",
   express.raw({ type: "application/json" }),
   (request, response) => {
     const sig = request.headers["stripe-signature"];
 
     let event;
+
+    // This is your test secret API key.
+    const stripe = require("stripe")(process.env.STRIPE_KEY);
 
     try {
       event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
@@ -199,5 +219,6 @@ app.post(
     response.send();
   }
 );
+const port = process.env.PORT || 4242;
 
-app.listen(process.env.PORT, () => console.log("Running on port 4242"));
+app.listen(port, () => console.log(`Server is running on port: ${port}`));

@@ -9,6 +9,8 @@
   "author": "stripe-samples",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
     "express": "^4.17.1",
     "stripe": "^13.11.0"
   }
