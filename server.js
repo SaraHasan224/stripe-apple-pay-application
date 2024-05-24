@@ -71,7 +71,7 @@ app.post(
 
     try {
       event = stripe.webhooks.constructEvent(
-        request.body,
+        request.rawBody,
         sig,
         process.env.STRIPE_WEBHHOK_SECRET
       );
