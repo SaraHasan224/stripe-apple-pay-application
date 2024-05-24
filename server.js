@@ -70,7 +70,11 @@ app.post(
     const stripe = require("stripe")(process.env.STRIPE_KEY);
 
     try {
-      event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
+      event = stripe.webhooks.constructEvent(
+        request.body,
+        sig,
+        process.env.STRIPE_WEBHHOK_SECRET
+      );
     } catch (err) {
       response.status(400).send(`Webhook Error: ${err.message}`);
       return;
