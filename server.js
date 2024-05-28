@@ -4,6 +4,7 @@ const app = express();
 require("dotenv").config();
 app.use(express.static("public"));
 const db = require("./db"); // Import the database connection
+const common = require("./common"); // Import the database connection
 // set the view engine to ejs
 app.set("view engine", "ejs");
 app.set("views", __dirname + "/views");
@@ -38,9 +39,38 @@ app.post("/create-checkout-session", async (req, res) => {
       unit_amount: 20,
       currency: "usd",
     });
-
+    let customerId = null;
+    // Create a customer with a valid address
+    stripe.customers
+      .create({
+        email: "sarahasan224@gmail.com",
+        address: {
+          line1: "51-53 Kings Road",
+          city: "Brighton",
+          state: "ES",
+          postal_code: "BN11NA",
+          country: "UK",
+        },
+      })
+      .then((customer) => {
+        customerId = customer.id;
+        console.log("Customer created:", customer.id);
+      })
+      .catch((error) => {
+        console.error("Error creating customer:", error);
+      });
     console.log(`Product ID: ${product.id}`);
     console.log(`Price ID: ${price}`);
+    let checkout_session = "";
+    // Run the function
+    common
+      .upsertCheckout()
+      .then(() => {
+        console.log("Operation completed successfully.");
+      })
+      .catch((err) => {
+        console.error("Error:", err);
+      });
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
@@ -53,31 +83,21 @@ app.post("/create-checkout-session", async (req, res) => {
       success_url: process.env.APP_URL + `success`,
       cancel_url: process.env.APP_URL + `cancel`,
       automatic_tax: { enabled: true },
+      // customer: customerId,
+      customer_email: "sarahasan224@gmail.com",
+      payment_intent_data: {
+        setup_future_usage: "off_session",
+      },
+      // custom_fields: [
+      //   {
+      //     key: "checkout_id_1",
+      //     label: "checkout_id",
+      //     type: "text",
+      //   },
+      // ],
     });
     console.log("session: ", session);
-
-    const query = `INSERT INTO checkout 
-    (stripe_checkout_id, customer_email, stripe_customer_id, currency, payment_status, total_amt) 
-    VALUES (?, ?, ?, ?, ?, ?)`;
-
-    const values = [
-      session.id ||
-        "cs_test_a1qine78RReHCMa1eUS06fLZKNu2skGkHVc9uwejJYVmllCkCUc2fBe0op",
-      session.customer_email || null,
-      null,
-      session.currency || "usd",
-      session.payment_status || "unpaid",
-      0,
-    ];
-
-    try {
-      const [results] = await db.query(query, values);
-      // res.json("Data inserted successfully");
-    } catch (err) {
-      console.error("Error inserting data:", err);
-      res.status(500).send("Server error: " + err.message);
-    }
-
+    common.upsertCheckoutSession(session);
     res.redirect(303, session.url);
   })();
 });
@@ -139,6 +159,15 @@ app.post(
         const paymentIntentSucceeded = event.data.object;
         console.log("paymentIntentSucceeded: ", paymentIntentSucceeded);
         // Then define and call a function to handle the event payment_intent.succeeded
+        break;
+      case "charge.succeeded":
+        const chargeSucceeded = event.data.object;
+        console.log("chargeSucceeded: ", chargeSucceeded);
+        break;
+      case "checkout.session.completed":
+        const checkoutSucceeded = event.data.object;
+        console.log("checkout.session.completed: ", checkoutSucceeded);
+        common.updateCheckoutStatus(checkoutSucceeded);
         break;
       // ... handle other event types
       default:
