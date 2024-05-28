@@ -40,25 +40,7 @@ app.post("/create-checkout-session", async (req, res) => {
       currency: "usd",
     });
     let customerId = null;
-    // Create a customer with a valid address
-    stripe.customers
-      .create({
-        email: "sarahasan224@gmail.com",
-        address: {
-          line1: "51-53 Kings Road",
-          city: "Brighton",
-          state: "ES",
-          postal_code: "BN11NA",
-          country: "UK",
-        },
-      })
-      .then((customer) => {
-        customerId = customer.id;
-        console.log("Customer created:", customer.id);
-      })
-      .catch((error) => {
-        console.error("Error creating customer:", error);
-      });
+
     console.log(`Product ID: ${product.id}`);
     console.log(`Price ID: ${price}`);
     let checkout_session = "";
@@ -80,11 +62,13 @@ app.post("/create-checkout-session", async (req, res) => {
         },
       ],
       mode: "payment",
+      // payment_method_types: ["card", "apple_pay", "google_pay"], // e.g.,
       success_url: process.env.APP_URL + `success`,
       cancel_url: process.env.APP_URL + `cancel`,
       automatic_tax: { enabled: true },
-      // customer: customerId,
-      customer_email: "sarahasan224@gmail.com",
+      // payment_method_options: ["card"],
+      customer: "cus_QBh7LHbksE1Rzw",
+      // customer_email: "sarahasan224@gmail.com",
       payment_intent_data: {
         setup_future_usage: "off_session",
       },
