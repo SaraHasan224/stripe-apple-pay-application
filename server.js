@@ -61,7 +61,7 @@ app.post("/create-checkout-session", async (req, res) => {
           quantity: 5,
         },
       ],
-      mode: "payment",
+      mode: "setup",
       // payment_method_types: ["card", "apple_pay", "google_pay"], // e.g.,
       success_url: process.env.APP_URL + `success`,
       cancel_url: process.env.APP_URL + `cancel`,
