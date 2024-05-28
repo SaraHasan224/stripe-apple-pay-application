@@ -68,17 +68,9 @@ app.post("/create-checkout-session", async (req, res) => {
       automatic_tax: { enabled: true },
       // payment_method_options: ["card"],
       customer: "cus_QBh7LHbksE1Rzw",
-      // customer_email: "sarahasan224@gmail.com",
-      payment_intent_data: {
-        setup_future_usage: "off_session",
-      },
-      // custom_fields: [
-      //   {
-      //     key: "checkout_id_1",
-      //     label: "checkout_id",
-      //     type: "text",
-      //   },
-      // ],
+      // payment_intent_data: {
+      //   setup_future_usage: "off_session",
+      // },
     });
     console.log("session: ", session);
     common.upsertCheckoutSession(session);
