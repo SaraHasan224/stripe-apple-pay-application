@@ -68,9 +68,9 @@ app.post("/create-checkout-session", async (req, res) => {
       automatic_tax: { enabled: true },
       // payment_method_options: ["card"],
       customer: "cus_QBh7LHbksE1Rzw",
-      payment_intent_data: {
-        setup_future_usage: "off_session",
-      },
+      // payment_intent_data: {
+      //   setup_future_usage: "off_session",
+      // },
     });
     console.log("session: ", session);
     common.upsertCheckoutSession(session);
