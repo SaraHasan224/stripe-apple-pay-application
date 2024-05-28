@@ -1,10 +1,18 @@
 const express = require("express");
+const bodyParser = require("body-parser");
 const app = express();
 // Load environment variables from .env file
 require("dotenv").config();
 app.use(express.static("public"));
 const db = require("./db"); // Import the database connection
 const common = require("./common"); // Import the database connection
+const customer = require("./stripe/customer"); // Import the database connection
+
+// Parse JSON bodies
+// app.use(bodyParser.json());
+
+// Parse URL-encoded bodies
+app.use(bodyParser.urlencoded({ extended: true }));
 // set the view engine to ejs
 app.set("view engine", "ejs");
 app.set("views", __dirname + "/views");
@@ -24,59 +32,84 @@ app.get("/cancel", function (req, res) {
   res.render("pages/cancel");
 });
 
-app.post("/create-checkout-session", async (req, res) => {
-  let price;
-  // This is your test secret API key.
-  const stripe = require("stripe")(process.env.STRIPE_KEY);
-  (async () => {
-    console.log("stripe key: ", process.env.STRIPE_KEY);
-    const product = await stripe.products.create({
-      name: "Product Name",
-    });
+// Parse JSON bodies
+app.post(
+  "/create-checkout-session",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    let price;
+    // Retrieve email from request body
+    const body = req.body.toString();
+    console.log("my body: ", body);
+    // Find the index of the email value
+    const emailStartIndex =
+      body.indexOf('name="email"') + 'name="email"\r\n\r\n'.length;
+    const emailEndIndex = body.indexOf("\r\n", emailStartIndex);
 
-    price = await stripe.prices.create({
-      product: product.id,
-      unit_amount: 20,
-      currency: "usd",
-    });
-    let customerId = null;
+    // Find the index of the name value
+    const nameStartIndex =
+      body.indexOf('name="customer_name"') +
+      'name="customer_name"\r\n\r\n'.length;
+    const nameEndIndex = body.indexOf("\r\n", nameStartIndex);
 
-    console.log(`Product ID: ${product.id}`);
-    console.log(`Price ID: ${price}`);
-    let checkout_session = "";
-    // Run the function
-    common
-      .upsertCheckout()
-      .then(() => {
-        console.log("Operation completed successfully.");
-      })
-      .catch((err) => {
-        console.error("Error:", err);
+    // Extract the email value
+    const email = body.substring(emailStartIndex, emailEndIndex);
+    const name = body.substring(nameStartIndex, nameEndIndex);
+
+    // This is your test secret API key.
+    const stripe = require("stripe")(process.env.STRIPE_KEY);
+    (async () => {
+      console.log("stripe key: ", process.env.STRIPE_KEY);
+      const product = await stripe.products.create({
+        name: "Product Name",
       });
-    const session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-          price: price.id,
-          quantity: 5,
+
+      price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: 20,
+        currency: "usd",
+      });
+      let customerId = await customer.createOrFindCustomer(email, name);
+      console.log("customerId:", customerId);
+      console.log(`Product ID: ${product.id}`);
+      console.log(`Price ID: ${price}`);
+      let checkout_session = "";
+      // Run the function
+      common
+        .upsertCheckout()
+        .then(() => {
+          console.log("Operation completed successfully.");
+        })
+        .catch((err) => {
+          console.error("Error:", err);
+        });
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
+            price: price.id,
+            quantity: 5,
+          },
+        ],
+        mode: "payment",
+        payment_method_types: ["card"], // e.g.,
+        success_url: process.env.APP_URL + `success`,
+        cancel_url: process.env.APP_URL + `cancel`,
+        automatic_tax: { enabled: true },
+        // payment_method_options: ["card"],
+        customer: customerId,
+        payment_intent_data: {
+          setup_future_usage: "off_session",
         },
-      ],
-      mode: "payment",
-      payment_method_types: ["card"], // e.g.,
-      success_url: process.env.APP_URL + `success`,
-      cancel_url: process.env.APP_URL + `cancel`,
-      automatic_tax: { enabled: true },
-      // payment_method_options: ["card"],
-      customer: "cus_QBh7LHbksE1Rzw",
-      payment_intent_data: {
-        setup_future_usage: "off_session",
-      },
-    });
-    console.log("session: ", session);
-    common.upsertCheckoutSession(session);
-    res.redirect(303, session.url);
-  })();
-});
+      });
+      // Set the status code to 200
+      res.statusCode = 200;
+      common.upsertCheckoutSession(session);
+      // res.redirect(303, session.url);
+      res.end(JSON.stringify({ url: session.url }));
+    })();
+  }
+);
 
 // Match the raw body to content type application/json
 // If you are using Express v4 - v4.16 you need to use body-parser, not express, to retrieve the request body

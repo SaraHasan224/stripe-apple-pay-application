@@ -87,7 +87,6 @@ async function upsertCheckoutSession(session) {
 
       try {
         const [results] = await connection.execute(query, values);
-        console.log("Data updated successfully");
       } catch (err) {
         console.error("Error updating data:", err);
         throw new Error("Server error: " + err.message);
@@ -139,7 +138,6 @@ async function updateCheckoutStatus(session) {
 
       try {
         const [results] = await connection.execute(query, values);
-        console.log("Data updated successfully");
       } catch (err) {
         console.error("Error updating data:", err);
         throw new Error("Server error: " + err.message);

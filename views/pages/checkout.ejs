@@ -17,9 +17,72 @@
           <h5>$20.00</h5>
         </div>
       </div>
-      <form action="<%= appUrl %>create-checkout-session" method="POST">
+      <form
+        id="checkout-form"
+        action="<%= appUrl %>create-checkout-session"
+        method="POST"
+      >
+        <input
+          type="email"
+          name="email"
+          id="email"
+          placeholder="Your email"
+          required
+        />
+        <input
+          type="text"
+          name="customer_name"
+          id="customer_name"
+          placeholder="Your name"
+          required
+        />
         <button type="submit" id="checkout-button">Checkout</button>
       </form>
     </section>
+    <script>
+      document
+        .getElementById("checkout-form")
+        .addEventListener("submit", function (event) {
+          var email = document.getElementById("email").value;
+          var customer_name = document.getElementById("customer_name").value;
+          alert(email);
+          // Attach the email value to the form data
+          var formData = new FormData();
+          formData.append("email", email);
+          formData.append("customer_name", customer_name);
+          // Append any other form data if needed
+
+          // Create headers object with Content-Type
+          var headers = new Headers();
+          headers.append("Content-Type", "application/json");
+
+          // Submit the form with updated data
+          fetch("<%= appUrl %>create-checkout-session", {
+            method: "POST",
+            body: formData,
+            headers: headers,
+          })
+            .then(function (response) {
+              console.log("----session response-----:", response);
+              return response.json();
+            })
+            .then(function (session) {
+              console.log("----session-----:", session);
+              window.location.href = session.url;
+            })
+            .then(function (result) {
+              console.log("----session error-----:", result);
+              if (result.error) {
+                alert(result.error.message);
+              }
+            })
+            .catch(function (error) {
+              console.log("----session catch error-----:", error);
+              console.error("Error:", error);
+            });
+
+          event.preventDefault();
+        });
+    </script>
   </body>
 </html>
