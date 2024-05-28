@@ -3,6 +3,7 @@ const app = express();
 // Load environment variables from .env file
 require("dotenv").config();
 app.use(express.static("public"));
+const db = require("./db"); // Import the database connection
 // set the view engine to ejs
 app.set("view engine", "ejs");
 app.set("views", __dirname + "/views");
@@ -54,12 +55,103 @@ app.post("/create-checkout-session", async (req, res) => {
       automatic_tax: { enabled: true },
     });
     console.log("session: ", session);
+
+    const query = `INSERT INTO checkout 
+    (stripe_checkout_id, customer_email, stripe_customer_id, currency, payment_status, total_amt) 
+    VALUES (?, ?, ?, ?, ?, ?)`;
+
+    const values = [
+      session.id ||
+        "cs_test_a1qine78RReHCMa1eUS06fLZKNu2skGkHVc9uwejJYVmllCkCUc2fBe0op",
+      session.customer_email || null,
+      null,
+      session.currency || "usd",
+      session.payment_status || "unpaid",
+      0,
+    ];
+
+    try {
+      const [results] = await db.query(query, values);
+      // res.json("Data inserted successfully");
+    } catch (err) {
+      console.error("Error inserting data:", err);
+      res.status(500).send("Server error: " + err.message);
+    }
+
     res.redirect(303, session.url);
   })();
 });
 
+// Match the raw body to content type application/json
+// If you are using Express v4 - v4.16 you need to use body-parser, not express, to retrieve the request body
 app.post(
-  "/webhook",
+  "/stripe_webhooks",
+  express.json({ type: "application/json" }),
+  (request, response) => {
+    const event = request.body;
+
+    // Handle the event
+    switch (event.type) {
+      case "customer.created":
+        const customerCreated = event.data.object;
+        console.log("customerCreated: ", customerCreated);
+        // Then define and call a function to handle the event customer.created
+        break;
+      case "payment_intent.succeeded":
+        const paymentIntent = event.data.object;
+        console.log("payment intent: ", paymentIntent);
+        // Then define and call a method to handle the successful payment intent.
+        // handlePaymentIntentSucceeded(paymentIntent);
+        break;
+      case "payment_method.attached":
+        const paymentMethod = event.data.object;
+        console.log("payment_method.attached: ", paymentMethod);
+        // Then define and call a method to handle the successful attachment of a PaymentMethod.
+        // handlePaymentMethodAttached(paymentMethod);
+        break;
+      case "payment_intent.partially_funded":
+        const paymentIntentPartiallyFunded = event.data.object;
+        console.log(
+          "paymentIntentPartiallyFunded: ",
+          paymentIntentPartiallyFunded
+        );
+        // Then define and call a function to handle the event payment_intent.partially_funded
+        break;
+      case "payment_intent.payment_failed":
+        const paymentIntentPaymentFailed = event.data.object;
+        console.log("paymentIntentPaymentFailed: ", paymentIntentPaymentFailed);
+        // Then define and call a function to handle the event payment_intent.payment_failed
+        break;
+      case "payment_intent.processing":
+        const paymentIntentProcessing = event.data.object;
+        console.log("paymentIntentProcessing: ", paymentIntentProcessing);
+        // Then define and call a function to handle the event payment_intent.processing
+        break;
+      case "payment_intent.requires_action":
+        const paymentIntentRequiresAction = event.data.object;
+        console.log(
+          "paymentIntentRequiresAction: ",
+          paymentIntentRequiresAction
+        );
+        // Then define and call a function to handle the event payment_intent.requires_action
+        break;
+      case "payment_intent.succeeded":
+        const paymentIntentSucceeded = event.data.object;
+        console.log("paymentIntentSucceeded: ", paymentIntentSucceeded);
+        // Then define and call a function to handle the event payment_intent.succeeded
+        break;
+      // ... handle other event types
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    // Return a response to acknowledge receipt of the event
+    response.json({ received: true });
+  }
+);
+
+app.post(
+  "/stripe-webhook",
   express.raw({ type: "application/json" }),
   (request, response) => {
     const sig = request.headers["stripe-signature"];
