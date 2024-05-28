@@ -61,16 +61,16 @@ app.post("/create-checkout-session", async (req, res) => {
           quantity: 5,
         },
       ],
-      mode: "setup",
-      // payment_method_types: ["card", "apple_pay", "google_pay"], // e.g.,
+      mode: "payment",
+      payment_method_types: ["card"], // e.g.,
       success_url: process.env.APP_URL + `success`,
       cancel_url: process.env.APP_URL + `cancel`,
       automatic_tax: { enabled: true },
       // payment_method_options: ["card"],
       customer: "cus_QBh7LHbksE1Rzw",
-      // payment_intent_data: {
-      //   setup_future_usage: "off_session",
-      // },
+      payment_intent_data: {
+        setup_future_usage: "off_session",
+      },
     });
     console.log("session: ", session);
     common.upsertCheckoutSession(session);
