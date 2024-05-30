@@ -103,7 +103,6 @@ app.post(
         ],
         mode: "payment",
         automatic_tax: { enabled: true },
-        payment_method_options: ["card"],
         payment_intent_data: {
           setup_future_usage: "off_session",
         },
