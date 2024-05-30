@@ -89,24 +89,24 @@ app.post(
           console.error("Error:", err);
         });
       const session = await stripe.checkout.sessions.create({
-        // line_items: [
-        //   {
-        //     // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-        //     price: price.id,
-        //     quantity: 5,
-        //   },
-        // ],
-        mode: "setup",
-        // mode: "payment",
+        // mode: "setup",
         payment_method_types: ["card"], // e.g.,
         success_url: process.env.APP_URL + `success`,
-        cancel_url: process.env.APP_URL + `cancel`,
-        // automatic_tax: { enabled: true },
-        // payment_method_options: ["card"],
         customer: customerId,
-        // payment_intent_data: {
-        //   setup_future_usage: "off_session",
-        // },
+        cancel_url: process.env.APP_URL + `cancel`,
+        line_items: [
+          {
+            // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
+            price: price.id,
+            quantity: 5,
+          },
+        ],
+        mode: "payment",
+        automatic_tax: { enabled: true },
+        payment_method_options: ["card"],
+        payment_intent_data: {
+          setup_future_usage: "off_session",
+        },
       });
       // Set the status code to 200
       res.statusCode = 200;
