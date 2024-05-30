@@ -32,6 +32,11 @@ app.get("/cancel", function (req, res) {
   res.render("pages/cancel");
 });
 
+// intent page
+app.get("/intent", function (req, res) {
+  res.render("pages/intent", { appUrl: process.env.APP_URL });
+});
+
 // Parse JSON bodies
 app.post(
   "/create-checkout-session",
@@ -84,23 +89,24 @@ app.post(
           console.error("Error:", err);
         });
       const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-            price: price.id,
-            quantity: 5,
-          },
-        ],
-        mode: "payment",
+        // line_items: [
+        //   {
+        //     // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
+        //     price: price.id,
+        //     quantity: 5,
+        //   },
+        // ],
+        mode: "setup",
+        // mode: "payment",
         payment_method_types: ["card"], // e.g.,
         success_url: process.env.APP_URL + `success`,
         cancel_url: process.env.APP_URL + `cancel`,
-        automatic_tax: { enabled: true },
+        // automatic_tax: { enabled: true },
         // payment_method_options: ["card"],
         customer: customerId,
-        payment_intent_data: {
-          setup_future_usage: "off_session",
-        },
+        // payment_intent_data: {
+        //   setup_future_usage: "off_session",
+        // },
       });
       // Set the status code to 200
       res.statusCode = 200;
@@ -111,6 +117,33 @@ app.post(
   }
 );
 
+app.post(
+  "/create-intent-session",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const session = await stripe.checkout.sessions.create({
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "T-shirt",
+            },
+            unit_amount: 2000,
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      ui_mode: "embedded",
+      return_url:
+        "https://example.com/checkout/return?session_id={CHECKOUT_SESSION_ID}",
+    });
+
+    res.send({ clientSecret: session.client_secret });
+  }
+);
+
 // Match the raw body to content type application/json
 // If you are using Express v4 - v4.16 you need to use body-parser, not express, to retrieve the request body
 app.post(
@@ -118,7 +151,6 @@ app.post(
   express.json({ type: "application/json" }),
   (request, response) => {
     const event = request.body;
-
     // Handle the event
     switch (event.type) {
       case "customer.created":
