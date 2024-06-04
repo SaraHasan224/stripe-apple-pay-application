@@ -33,11 +33,22 @@ app.get("/cancel", function (req, res) {
 });
 
 // intent page
-app.get("/intent", function (req, res) {
-  res.render("pages/intent", { appUrl: process.env.APP_URL });
+app.get("/intent", async function (req, res) {
+  const stripe = require("stripe")(process.env.STRIPE_KEY);
+  const intent = await stripe.paymentIntents.create({
+    amount: 1,
+    currency: "usd",
+    automatic_payment_methods: {
+      enabled: true,
+    },
+  });
+  res.render("pages/intent", {
+    appUrl: process.env.APP_URL,
+    client_secret: intent.client_secret,
+  });
 });
 
-// Parse JSON bodies
+// Parse create checkout session
 app.post(
   "/create-checkout-session",
   express.raw({ type: "application/json" }),
@@ -115,36 +126,162 @@ app.post(
     })();
   }
 );
-
+// create-payment-intent-session
 app.post(
-  "/create-intent-session",
+  "/create-payment-intent-session",
   express.raw({ type: "application/json" }),
   async (req, res) => {
-    const session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "T-shirt",
-            },
-            unit_amount: 2000,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      ui_mode: "embedded",
-      return_url:
-        "https://example.com/checkout/return?session_id={CHECKOUT_SESSION_ID}",
-    });
+    let price;
+    // Retrieve email from request body
+    const body = req.body.toString();
+    console.log("my body: ", body);
+    // Find the index of the email value
+    const emailStartIndex =
+      body.indexOf('name="email"') + 'name="email"\r\n\r\n'.length;
+    const emailEndIndex = body.indexOf("\r\n", emailStartIndex);
 
-    res.send({ clientSecret: session.client_secret });
+    // Find the index of the name value
+    const nameStartIndex =
+      body.indexOf('name="customer_name"') +
+      'name="customer_name"\r\n\r\n'.length;
+    const nameEndIndex = body.indexOf("\r\n", nameStartIndex);
+
+    // Extract the email value
+    const email = body.substring(emailStartIndex, emailEndIndex);
+    const name = body.substring(nameStartIndex, nameEndIndex);
+
+    // This is your test secret API key.
+    const stripe = require("stripe")(process.env.STRIPE_KEY);
+    (async () => {
+      console.log("stripe key: ", process.env.STRIPE_KEY);
+      const product = await stripe.products.create({
+        name: "Product Name",
+      });
+
+      price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: 20,
+        currency: "usd",
+      });
+      let customerId = await customer.createOrFindCustomer(email, name);
+      console.log("customerId:", customerId);
+      console.log(`Product ID: ${product.id}`);
+      console.log(`Price ID: ${price}`);
+      let checkout_session = "";
+      // Run the function
+      common
+        .upsertCheckout()
+        .then(() => {
+          console.log("Operation completed successfully.");
+        })
+        .catch((err) => {
+          console.error("Error:", err);
+        });
+      const session = await stripe.checkout.sessions.create({
+        // mode: "setup",
+        payment_method_types: ["card"], // e.g.,
+        success_url: process.env.APP_URL + `success`,
+        customer: customerId,
+        cancel_url: process.env.APP_URL + `cancel`,
+        line_items: [
+          {
+            // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
+            price: price.id,
+            quantity: 5,
+          },
+        ],
+        mode: "subscription",
+        automatic_tax: { enabled: true },
+        // payment_intent_data: {
+        //   setup_future_usage: "off_session",
+        // },
+      });
+      // Set the status code to 200
+      res.statusCode = 200;
+      common.upsertCheckoutSession(session);
+      // res.redirect(303, session.url);
+      res.end(JSON.stringify({ url: session.url }));
+    })();
   }
 );
 
-// Match the raw body to content type application/json
-// If you are using Express v4 - v4.16 you need to use body-parser, not express, to retrieve the request body
+//Subscription
+// checkout page
+app.get("/subscription", function (req, res) {
+  res.render("pages/subscription/checkout", { appUrl: process.env.APP_URL });
+});
+
+// success page
+app.get("/subscription/success", function (req, res) {
+  res.render("pages/subscription/success");
+});
+
+// cancel page
+app.get("/subscription/cancel", function (req, res) {
+  res.render("pages/subscription/cancel");
+});
+
+app.post("/create-portal-session", async (req, res) => {
+  // For demonstration purposes, we're using the Checkout session to retrieve the customer ID.
+  // Typically this is stored alongside the authenticated user in your database.
+  const { session_id } = req.body;
+  const checkoutSession = await stripe.checkout.sessions.retrieve(session_id);
+
+  // This is the url to which the customer will be redirected when they are done
+  // managing their billing with the portal.
+  const returnUrl = YOUR_DOMAIN;
+
+  const portalSession = await stripe.billingPortal.sessions.create({
+    customer: checkoutSession.customer,
+    return_url: returnUrl,
+  });
+
+  res.redirect(303, portalSession.url);
+});
+
+app.post("/create-subscription", async (req, res) => {
+  const stripe = require("stripe")(process.env.STRIPE_KEY);
+  try {
+    // Create a product
+    let product = await stripe.products.create({
+      name: "Test Product",
+    });
+
+    // Create a price for the product
+    let price = await stripe.prices.create({
+      product: product.id,
+      unit_amount: 2000,
+      currency: "usd",
+      recurring: {
+        interval: "month",
+      },
+    });
+
+    console.log("lookup keys: ", req.body.lookup_key);
+    console.log("price keys: ", price);
+
+    // Create a checkout session
+    const session = await stripe.checkout.sessions.create({
+      currency: "usd",
+      line_items: [
+        {
+          price: price.id,
+          quantity: 1,
+        },
+      ],
+      mode: "subscription",
+      success_url: `${process.env.APP_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL}/cancel.html`,
+    });
+
+    res.redirect(303, session.url);
+  } catch (error) {
+    console.error("Error creating subscription: ", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// stripe webhooks
 app.post(
   "/stripe_webhooks",
   express.json({ type: "application/json" }),
@@ -384,6 +521,7 @@ app.post(
     response.send();
   }
 );
+
 const port = process.env.PORT || 4242;
 
 app.listen(port, () => console.log(`Server is running on port: ${port}`));

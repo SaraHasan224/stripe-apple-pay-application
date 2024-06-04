@@ -7,38 +7,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="style.css" />
     <script src="https://js.stripe.com/v3/"></script>
-    <script src="checkout.js" defer></script>
+    <!-- <script src="checkout.js" defer></script> -->
   </head>
   <body>
-    <!-- Display a payment form -->
-    <div id="checkout">
-      <!-- Checkout will insert the payment form here -->
-    </div>
+    <form id="payment-form" data-secret="{{ client_secret }}">
+      <div id="payment-element">
+        <!-- Elements will create form elements here -->
+      </div>
+
+      <button id="submit">Submit</button>
+    </form>
   </body>
-  <script>
-    // This is your test publishable API key.
-    const stripe = Stripe(
-      "pk_test_51PIPzQI0DGZ9CkPIzfQUAihgsOIoTlIiVSY4gFmSsGqA31ZaKTK21mXpn4jDEkPWNewclCIfHZupA014aLTKe73D00RjRtPzar"
-    );
-
-    initialize();
-
-    // Create a Checkout Session
-    async function initialize() {
-      const fetchClientSecret = async () => {
-        const response = await fetch("<%= appUrl %>create-intent-session", {
-          method: "POST",
-        });
-        const { clientSecret } = await response.json();
-        return clientSecret;
-      };
-
-      const checkout = await stripe.initEmbeddedCheckout({
-        fetchClientSecret,
-      });
-
-      // Mount Checkout
-      checkout.mount("#checkout");
-    }
-  </script>
 </html>
