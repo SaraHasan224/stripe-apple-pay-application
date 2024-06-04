@@ -213,30 +213,57 @@ app.get("/subscription", function (req, res) {
 
 // success page
 app.get("/subscription/success", function (req, res) {
-  res.render("pages/subscription/success");
+  const sessionId = req.query.session_id;
+  res.render("pages/subscription/success", {
+    appUrl: process.env.APP_URL,
+    sessionId: sessionId,
+  });
 });
 
 // cancel page
 app.get("/subscription/cancel", function (req, res) {
   res.render("pages/subscription/cancel");
 });
-
 app.post("/create-portal-session", async (req, res) => {
-  // For demonstration purposes, we're using the Checkout session to retrieve the customer ID.
-  // Typically this is stored alongside the authenticated user in your database.
-  const { session_id } = req.body;
-  const checkoutSession = await stripe.checkout.sessions.retrieve(session_id);
+  try {
+    const { session_id } = req.body;
+    const stripe = require("stripe")(process.env.STRIPE_KEY);
 
-  // This is the url to which the customer will be redirected when they are done
-  // managing their billing with the portal.
-  const returnUrl = YOUR_DOMAIN;
+    // Check if session_id is provided
+    if (!session_id) {
+      return res.status(400).send("Session ID is required.");
+    }
 
-  const portalSession = await stripe.billingPortal.sessions.create({
-    customer: checkoutSession.customer,
-    return_url: returnUrl,
-  });
+    // Retrieve the Checkout session
+    const checkoutSession = await stripe.checkout.sessions.retrieve(session_id);
 
-  res.redirect(303, portalSession.url);
+    if (!checkoutSession) {
+      return res.status(404).send("Checkout session not found.");
+    }
+
+    console.log("checkoutSession: ", checkoutSession);
+
+    // This is the URL to which the customer will be redirected when they are done
+    // managing their billing with the portal.
+    const returnUrl = `${process.env.APP_URL}/subscription`;
+
+    // Create a billing portal session
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: checkoutSession.customer,
+      return_url: returnUrl,
+    });
+
+    res.redirect(303, portalSession.url);
+  } catch (error) {
+    console.error("Error creating portal session: ", error);
+
+    // Provide detailed error information
+    if (error.type === "StripeInvalidRequestError") {
+      return res.status(400).send(`Stripe API error: ${error.raw.message}`);
+    }
+
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 app.post("/create-subscription", async (req, res) => {
@@ -279,8 +306,8 @@ app.post("/create-subscription", async (req, res) => {
         },
       ],
       mode: "subscription",
-      success_url: `${process.env.APP_URL}subscription/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.APP_URL}subscription/cancel.html`,
+      success_url: `${process.env.APP_URL}subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL}subscription/cancel`,
       subscription_data: {
         trial_period_days: 7,
         trial_settings: {
