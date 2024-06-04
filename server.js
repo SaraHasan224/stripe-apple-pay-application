@@ -260,6 +260,15 @@ app.post("/create-subscription", async (req, res) => {
     console.log("lookup keys: ", req.body.lookup_key);
     console.log("price keys: ", price);
 
+    // Calculate trial_end as 30 days from today (example)
+    const trialDays = 30;
+    const today = new Date();
+    const trialStartDate = new Date(today.setDate(today.getDate()));
+    const trialStartTimestamp = Math.floor(trialStartDate.getTime() / 1000);
+
+    const trialEndDate = new Date(today.setDate(today.getDate() + trialDays));
+    const trialEndTimestamp = Math.floor(trialEndDate.getTime() / 1000);
+
     // Create a checkout session
     const session = await stripe.checkout.sessions.create({
       currency: "usd",
@@ -270,8 +279,16 @@ app.post("/create-subscription", async (req, res) => {
         },
       ],
       mode: "subscription",
-      success_url: `${process.env.APP_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.APP_URL}/cancel.html`,
+      success_url: `${process.env.APP_URL}subscription/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL}subscription/cancel.html`,
+      subscription_data: {
+        trial_period_days: 7,
+        trial_settings: {
+          end_behavior: {
+            missing_payment_method: "cancel", // Other options: 'create_invoice', 'pause'
+          },
+        },
+      },
     });
 
     res.redirect(303, session.url);
