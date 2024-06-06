@@ -1,35 +1,65 @@
 const express = require("express");
-const bodyParser = require("body-parser");
-const app = express();
+const ejs = require("ejs");
+const multer = require("multer");
+const storage = multer.memoryStorage(); // Store files in memory
+const upload = multer({ storage: storage });
+const expressLayouts = require("express-ejs-layouts");
+const path = require("path");
+const helpers = require("./util/helpers");
+
 // Load environment variables from .env file
 require("dotenv").config();
-app.use(express.static("public"));
-const db = require("./db"); // Import the database connection
 const common = require("./common"); // Import the database connection
 const customer = require("./stripe/customer"); // Import the database connection
+const subscription = require("./stripe/subscription"); // Import the database connection
+const item = require("./stripe/subscription-item"); // Import the database connection
+const products = require("./stripe/products"); // Import the database connection
+const { subscribe } = require("diagnostics_channel");
 
-// Parse JSON bodies
-// app.use(bodyParser.json());
-
-// Parse URL-encoded bodies
-app.use(bodyParser.urlencoded({ extended: true }));
-// set the view engine to ejs
+const app = express();
+app.use(express.static("public"));
+// Set the view engine to ejs
 app.set("view engine", "ejs");
-app.set("views", __dirname + "/views");
+// Set the directory for the views
+app.set("views", path.join(__dirname, "views"));
+// Use express-ejs-layouts
+app.use(expressLayouts);
+// Specify the default layout
+app.set("layout", "layouts/main");
+// Add a helper function (you need to configure this manually within your views)
+app.locals.helpers = helpers;
 
 // checkout page
-app.get("/", function (req, res) {
+app.get("/", async function (req, res) {
+  let result = await products.findAllProducts();
+  res.render("pages/index", { appUrl: process.env.APP_URL, products: result });
+});
+app.get("/checkout", function (req, res) {
   res.render("pages/checkout", { appUrl: process.env.APP_URL });
 });
-
-// success page
 app.get("/success", function (req, res) {
-  res.render("pages/success");
+  res.render("pages/success", {
+    appUrl: process.env.APP_URL,
+  });
+});
+app.get("/cancel", function (req, res) {
+  res.render("pages/cancel", {
+    appUrl: process.env.APP_URL,
+  });
+});
+app.get("/subscription/success", function (req, res) {
+  const sessionId = req.query.session_id;
+  res.render("pages/subscription/success", {
+    appUrl: process.env.APP_URL,
+    sessionId: sessionId,
+  });
 });
 
 // cancel page
-app.get("/cancel", function (req, res) {
-  res.render("pages/cancel");
+app.get("/subscription/cancel", function (req, res) {
+  res.render("pages/subscription/cancel", {
+    appUrl: process.env.APP_URL,
+  });
 });
 
 // intent page
@@ -48,192 +78,106 @@ app.get("/intent", async function (req, res) {
   });
 });
 
-// Parse create checkout session
-app.post(
-  "/create-checkout-session",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    let price;
-    // Retrieve email from request body
-    const body = req.body.toString();
-    console.log("my body: ", body);
-    // Find the index of the email value
-    const emailStartIndex =
-      body.indexOf('name="email"') + 'name="email"\r\n\r\n'.length;
-    const emailEndIndex = body.indexOf("\r\n", emailStartIndex);
+/**
+ * CUSTOMER
+ */
 
-    // Find the index of the name value
-    const nameStartIndex =
-      body.indexOf('name="customer_name"') +
-      'name="customer_name"\r\n\r\n'.length;
-    const nameEndIndex = body.indexOf("\r\n", nameStartIndex);
+app.post("/find-customer-details", upload.none(), async (req, res) => {
+  const email = req.body.email;
+  const name = req.body.customer_name;
 
-    // Extract the email value
-    const email = body.substring(emailStartIndex, emailEndIndex);
-    const name = body.substring(nameStartIndex, nameEndIndex);
-
-    // This is your test secret API key.
-    const stripe = require("stripe")(process.env.STRIPE_KEY);
-    (async () => {
-      console.log("stripe key: ", process.env.STRIPE_KEY);
-      const product = await stripe.products.create({
-        name: "Product Name",
-      });
-
-      price = await stripe.prices.create({
-        product: product.id,
-        unit_amount: 20,
-        currency: "usd",
-      });
-      let customerId = await customer.createOrFindCustomer(email, name);
-      console.log("customerId:", customerId);
-      console.log(`Product ID: ${product.id}`);
-      console.log(`Price ID: ${price}`);
-      let checkout_session = "";
-      // Run the function
-      common
-        .upsertCheckout()
-        .then(() => {
-          console.log("Operation completed successfully.");
-        })
-        .catch((err) => {
-          console.error("Error:", err);
-        });
-      const session = await stripe.checkout.sessions.create({
-        // mode: "setup",
-        payment_method_types: ["card"], // e.g.,
-        success_url: process.env.APP_URL + `success`,
-        customer: customerId,
-        cancel_url: process.env.APP_URL + `cancel`,
-        line_items: [
-          {
-            // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-            price: price.id,
-            quantity: 5,
-          },
-        ],
-        mode: "payment",
-        automatic_tax: { enabled: true },
-        payment_intent_data: {
-          setup_future_usage: "off_session",
-        },
-      });
-      // Set the status code to 200
-      res.statusCode = 200;
-      common.upsertCheckoutSession(session);
-      // res.redirect(303, session.url);
-      res.end(JSON.stringify({ url: session.url }));
-    })();
-  }
-);
-// create-payment-intent-session
-app.post(
-  "/create-payment-intent-session",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    let price;
-    // Retrieve email from request body
-    const body = req.body.toString();
-    console.log("my body: ", body);
-    // Find the index of the email value
-    const emailStartIndex =
-      body.indexOf('name="email"') + 'name="email"\r\n\r\n'.length;
-    const emailEndIndex = body.indexOf("\r\n", emailStartIndex);
-
-    // Find the index of the name value
-    const nameStartIndex =
-      body.indexOf('name="customer_name"') +
-      'name="customer_name"\r\n\r\n'.length;
-    const nameEndIndex = body.indexOf("\r\n", nameStartIndex);
-
-    // Extract the email value
-    const email = body.substring(emailStartIndex, emailEndIndex);
-    const name = body.substring(nameStartIndex, nameEndIndex);
-
-    // This is your test secret API key.
-    const stripe = require("stripe")(process.env.STRIPE_KEY);
-    (async () => {
-      console.log("stripe key: ", process.env.STRIPE_KEY);
-      const product = await stripe.products.create({
-        name: "Product Name",
-      });
-
-      price = await stripe.prices.create({
-        product: product.id,
-        unit_amount: 20,
-        currency: "usd",
-      });
-      let customerId = await customer.createOrFindCustomer(email, name);
-      console.log("customerId:", customerId);
-      console.log(`Product ID: ${product.id}`);
-      console.log(`Price ID: ${price}`);
-      let checkout_session = "";
-      // Run the function
-      common
-        .upsertCheckout()
-        .then(() => {
-          console.log("Operation completed successfully.");
-        })
-        .catch((err) => {
-          console.error("Error:", err);
-        });
-      const session = await stripe.checkout.sessions.create({
-        // mode: "setup",
-        payment_method_types: ["card"], // e.g.,
-        success_url: process.env.APP_URL + `success`,
-        customer: customerId,
-        cancel_url: process.env.APP_URL + `cancel`,
-        line_items: [
-          {
-            // Provide the exact Price ID (for example, pr_1234) of the product you want to sell
-            price: price.id,
-            quantity: 5,
-          },
-        ],
-        mode: "subscription",
-        automatic_tax: { enabled: true },
-        // payment_intent_data: {
-        //   setup_future_usage: "off_session",
-        // },
-      });
-      // Set the status code to 200
-      res.statusCode = 200;
-      common.upsertCheckoutSession(session);
-      // res.redirect(303, session.url);
-      res.end(JSON.stringify({ url: session.url }));
-    })();
-  }
-);
-
-//Subscription
-// checkout page
-app.get("/subscription", function (req, res) {
-  res.render("pages/subscription/checkout", { appUrl: process.env.APP_URL });
+  let customer_info = await customer.findCustomerDetails(email, name);
+  // Set the status code to 200
+  res.statusCode = 200;
+  res.end(JSON.stringify({ result: customer_info }));
 });
 
-// success page
-app.get("/subscription/success", function (req, res) {
-  const sessionId = req.query.session_id;
-  res.render("pages/subscription/success", {
-    appUrl: process.env.APP_URL,
-    sessionId: sessionId,
+/**
+ * SUBSCRIPTION
+ */
+
+app.post("/create-subscription", upload.none(), async (req, res) => {
+  console.log("--- subscription_info: ", req.body);
+  console.log({
+    customer_id: req.body.customer_id,
+    product_id: req.body.product_id,
   });
+  const isCustomerFirstSubscription = await subscription.isFirstSubscription(
+    req.body.customer_id,
+    req.body.product_id
+  );
+  let applyPromo = false;
+  let promoCode = null;
+  if (
+    isCustomerFirstSubscription == null ||
+    isCustomerFirstSubscription == "" ||
+    !isCustomerFirstSubscription
+  ) {
+    let promotion = await subscription.getWelcomePromoCode();
+    promoCode = promotion.code;
+    applyPromo = true;
+  }
+  const stripe = require("stripe")(process.env.STRIPE_KEY);
+  try {
+    // Calculate trial_end as 30 days from today (example)
+    const trialDays = 1;
+    const today = new Date();
+    const trialStartDate = new Date(today.setDate(today.getDate()));
+    const trialStartTimestamp = Math.floor(trialStartDate.getTime() / 1000);
+    const trialEndDate = new Date(today.setDate(today.getDate() + trialDays));
+    const trialEndTimestamp = Math.floor(trialEndDate.getTime() / 1000);
+    // Create a checkout session
+    const session = await stripe.checkout.sessions.create({
+      currency: "usd",
+      line_items: [
+        {
+          price: req.body.price_id,
+          quantity: 1,
+        },
+      ],
+      discounts: [
+        {
+          coupon: promoCode,
+        },
+      ],
+      customer_email: req.body.customer_email,
+      // metadata: req.body.metadata,
+      mode: "subscription",
+      success_url: `${process.env.APP_URL}subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_URL}subscription/cancel`,
+      subscription_data: {
+        trial_period_days: 1,
+        trial_settings: {
+          end_behavior: {
+            missing_payment_method: "cancel", // Other options: 'create_invoice', 'pause'
+          },
+        },
+      },
+    });
+    await subscription.syncSubscription(session, req.body);
+    // Set the status code to 200
+    res.statusCode = 200;
+    res.end(JSON.stringify({ url: session.url }));
+  } catch (error) {
+    console.error("Error creating subscription: ", error);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
-// cancel page
-app.get("/subscription/cancel", function (req, res) {
-  res.render("pages/subscription/cancel");
-});
 app.post("/create-portal-session", async (req, res) => {
   try {
-    const { session_id } = req.body;
+    let session_id = req.body?.session_id;
     const stripe = require("stripe")(process.env.STRIPE_KEY);
 
     // Check if session_id is provided
-    if (!session_id) {
-      return res.status(400).send("Session ID is required.");
+    if (!session_id || session_id == undefined) {
+      session_id = req.query.session_id;
     }
 
+    // Check if session_id is provided
+    if (!session_id || session_id == undefined) {
+      return res.status(400).send("Session ID is required.");
+    }
     // Retrieve the Checkout session
     const checkoutSession = await stripe.checkout.sessions.retrieve(session_id);
 
@@ -266,56 +210,20 @@ app.post("/create-portal-session", async (req, res) => {
   }
 });
 
-app.post("/create-subscription", async (req, res) => {
+app.post("/create-test-subscription", async (req, res) => {
   const stripe = require("stripe")(process.env.STRIPE_KEY);
   try {
-    // Create a product
-    let product = await stripe.products.create({
-      name: "Test Product",
-    });
-
-    // Create a price for the product
-    let price = await stripe.prices.create({
-      product: product.id,
-      unit_amount: 2000,
-      currency: "usd",
-      recurring: {
-        interval: "month",
-      },
-    });
-
-    console.log("lookup keys: ", req.body.lookup_key);
-    console.log("price keys: ", price);
-
-    // Calculate trial_end as 30 days from today (example)
-    const trialDays = 30;
-    const today = new Date();
-    const trialStartDate = new Date(today.setDate(today.getDate()));
-    const trialStartTimestamp = Math.floor(trialStartDate.getTime() / 1000);
-
-    const trialEndDate = new Date(today.setDate(today.getDate() + trialDays));
-    const trialEndTimestamp = Math.floor(trialEndDate.getTime() / 1000);
-
-    // Create a checkout session
     const session = await stripe.checkout.sessions.create({
       currency: "usd",
       line_items: [
         {
-          price: price.id,
+          price: "price_1POJobI0DGZ9CkPIi12HkGbS",
           quantity: 1,
         },
       ],
       mode: "subscription",
       success_url: `${process.env.APP_URL}subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.APP_URL}subscription/cancel`,
-      subscription_data: {
-        trial_period_days: 7,
-        trial_settings: {
-          end_behavior: {
-            missing_payment_method: "cancel", // Other options: 'create_invoice', 'pause'
-          },
-        },
-      },
     });
 
     res.redirect(303, session.url);
@@ -323,6 +231,113 @@ app.post("/create-subscription", async (req, res) => {
     console.error("Error creating subscription: ", error);
     res.status(500).send("Internal Server Error");
   }
+});
+
+app.get(
+  "/products",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    let request1 = {
+      identifier: "package_1",
+      properties: {
+        name: "Package 1",
+        amount: "7.99",
+        metadata: {
+          Authorized_Constacts: 5,
+          FHS_Staff_Involved: "No",
+        },
+      },
+    };
+    let request2 = {
+      identifier: "package_2",
+      properties: {
+        name: "Package 2",
+        amount: "15.99",
+        metadata: {
+          Authorized_Constacts: 20,
+          FHS_Staff_Involved: "No",
+        },
+      },
+    };
+    let request3 = {
+      identifier: "package_3",
+      properties: {
+        name: "Package 3",
+        amount: "29.99",
+        metadata: {
+          Authorized_Constacts: 20,
+          FHS_Staff_Involved: "Yes",
+        },
+      },
+    };
+    let result = await products.findOrCreateProducts(
+      request3.identifier,
+      request3.properties
+    );
+    // Set the status code to 200
+    res.statusCode = 200;
+    // res.redirect(303, session.url);
+    res.end(JSON.stringify({ result }));
+  }
+);
+
+app.get(
+  "/products-all",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    let result = await products.findAllProducts();
+    // Set the status code to 200
+    res.statusCode = 200;
+    // res.redirect(303, session.url);
+    res.end(JSON.stringify({ result: result }));
+  }
+);
+
+// Parse create checkout session
+app.post("/create-checkout-session", upload.none(), async (req, res) => {
+  let price;
+  // Retrieve email from request body
+  const body = req.body;
+  // Extract the email value
+  const email = body.email;
+  const name = body.customer_name;
+
+  // This is your test secret API key.
+  const stripe = require("stripe")(process.env.STRIPE_KEY);
+  (async () => {
+    let _customer = await customer.findCustomerDetails(email, name);
+    // Run the function
+    common
+      .upsertCheckout(_customer)
+      .then(() => {
+        console.log("Operation completed successfully.");
+      })
+      .catch((err) => {
+        console.error("Error:", err);
+      });
+    const session = await stripe.checkout.sessions.create({
+      // mode: "setup",
+      payment_method_types: ["card"], // e.g.,
+      success_url: process.env.APP_URL + `success`,
+      customer: _customer.id,
+      cancel_url: process.env.APP_URL + `cancel`,
+      line_items: [
+        {
+          price: "price_1POWFzI0DGZ9CkPIywufNp08",
+          quantity: 5,
+        },
+      ],
+      mode: "payment",
+      automatic_tax: { enabled: true },
+      payment_intent_data: {
+        setup_future_usage: "off_session",
+      },
+    });
+    // Set the status code to 200
+    res.statusCode = 200;
+    common.upsertCheckoutSession(session);
+    res.end(JSON.stringify({ url: session.url }));
+  })();
 });
 
 // stripe webhooks

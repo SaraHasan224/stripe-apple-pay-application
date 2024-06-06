@@ -1,6 +1,6 @@
 const db = require("./db"); // Import the database connection
 
-async function upsertCheckout() {
+async function upsertCheckout(_customer) {
   let connection;
 
   try {
@@ -20,8 +20,8 @@ async function upsertCheckout() {
 
       const updateValues = [
         null,
-        "sarahasan224@gmail.com",
-        null,
+        _customer.email,
+        _customer.id,
         "usd",
         0,
         rows[0].id,
@@ -37,9 +37,9 @@ async function upsertCheckout() {
       `;
 
       const insertValues = [
-        null || "",
-        "sarahasan224@gmail.com",
         null,
+        _customer.email,
+        _customer.id,
         "usd",
         "unpaid",
         0,
