@@ -21,6 +21,11 @@ form.addEventListener("submit", async (event) => {
   if (error) {
     resultElement.textContent = `Error: ${error.message}`;
   } else if (paymentIntent.status === "succeeded") {
-    resultElement.textContent = "Payment successful! " + paymentIntent;
+    resultElement.textContent = "Payment successful! ";
+
+    // Convert JSON data to a formatted string
+    const jsonString = JSON.stringify(jsonData, null, 2);
+    // Display JSON string in the div
+    document.getElementById("json-display").textContent = paymentIntent;
   }
 });
