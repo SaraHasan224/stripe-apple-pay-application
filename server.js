@@ -83,13 +83,14 @@ app.get("/payment-intent", async function (req, res) {
   // Access the dynamic parameter
   const intentId = req.query.intentId;
   alert(intentId);
-  const stripe = require("stripe")(process.env.STRIPE_KEY);
-  const intent = await stripe.paymentIntents.retrieve(intentId);
+  // const stripe = require("stripe")(process.env.STRIPE_KEY);
+  // const intent = await stripe.paymentIntents.retrieve(intentId);
 
   res.render("pages/intent/payment", {
     appUrl: process.env.APP_URL,
     stripeKey: process.env.STRIPE_PUBLISHABLE_KEY,
-    client_secret: intent.client_secret,
+    // client_secret: intent.client_secret,
+    client_secret: "",
   });
 });
 // https://fhs-dev-payments-ed0f47a43ff2.herokuapp.com/intent/pi_3MtwBwLkdIwHu7ix28a3tqPa
