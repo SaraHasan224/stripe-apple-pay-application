@@ -82,6 +82,7 @@ app.get("/intent", async function (req, res) {
 app.get("/intent/:intentId", async function (req, res) {
   // Access the dynamic parameter
   const intentId = req.params.intentId;
+  alert(intentId);
   const stripe = require("stripe")(process.env.STRIPE_KEY);
   const intent = await stripe.paymentIntents.retrieve(intentId);
 
