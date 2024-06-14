@@ -79,7 +79,7 @@ app.get("/intent", async function (req, res) {
 });
 
 // intent page
-app.get("/intent/:intentId", async function (req, res) {
+app.get("/payment-intent/:intentId", async function (req, res) {
   // Access the dynamic parameter
   const intentId = req.params.intentId;
   alert(intentId);
