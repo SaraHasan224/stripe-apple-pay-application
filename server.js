@@ -92,11 +92,12 @@ app.get("/payment-intent", async function (req, res, next) {
     console.log("intent id: ", intentId);
     const stripe = require("stripe")(process.env.STRIPE_KEY);
     const intent = await stripe.paymentIntents.retrieve(intentId);
-    res.render("pages/intent/payment", {
-      appUrl: process.env.APP_URL,
-      stripeKey: process.env.STRIPE_PUBLISHABLE_KEY,
-      client_secret: intent.client_secret,
-    });
+    res.status(200).send({ intent });
+    // res.render("pages/intent/payment", {
+    //   appUrl: process.env.APP_URL,
+    //   stripeKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    //   client_secret: intent.client_secret,
+    // });
   } catch (error) {
     next(error); // Pass errors to the error handler
   }
