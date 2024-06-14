@@ -88,16 +88,15 @@ app.get("/subscription/cancel", function (req, res) {
 app.get("/payment-intent", async function (req, res, next) {
   try {
     // Access the dynamic parameter
-    const intentId = req.query?.intentId;
-    console.log("intent id: ", intentId);
+    const intentId = req.query?.intent_id;
+    console.log("intent id: ", intent_id);
     const stripe = require("stripe")(process.env.STRIPE_KEY);
     const intent = await stripe.paymentIntents.retrieve(intentId);
-    res.status(200).send({ intent });
-    // res.render("pages/intent/payment", {
-    //   appUrl: process.env.APP_URL,
-    //   stripeKey: process.env.STRIPE_PUBLISHABLE_KEY,
-    //   client_secret: intent.client_secret,
-    // });
+    res.render("pages/intent/payment", {
+      appUrl: process.env.APP_URL,
+      stripeKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      client_secret: intent.client_secret,
+    });
   } catch (error) {
     next(error); // Pass errors to the error handler
   }
