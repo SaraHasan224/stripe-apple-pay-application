@@ -21,6 +21,6 @@ form.addEventListener("submit", async (event) => {
   if (error) {
     resultElement.textContent = `Error: ${error.message}`;
   } else if (paymentIntent.status === "succeeded") {
-    resultElement.textContent = "Payment successful!";
+    resultElement.textContent = "Payment successful! " + paymentIntent;
   }
 });
