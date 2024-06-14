@@ -43,10 +43,7 @@
   </body>
   <script>
     const clientSecret = "<%=client_secret%>";
-    if (clientSecret == "") {
-      alert("The client secret is empty");
-    }
-    const STRIPE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
+    const STRIPE_KEY = "<%=stripeKey%>";
   </script>
   <script src="../js/intent.js" defer></script>
 </html>
