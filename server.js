@@ -85,17 +85,21 @@ app.get("/subscription/cancel", function (req, res) {
   });
 });
 // intent page
-app.get("/payment-intent", async function (req, res) {
-  // Access the dynamic parameter
-  const intentId = req.query.intentId;
-  console.log("intent id: ", intentId);
-  const stripe = require("stripe")(process.env.STRIPE_KEY);
-  const intent = await stripe.paymentIntents.retrieve(intentId);
-  res.render("pages/intent/payment", {
-    appUrl: process.env.APP_URL,
-    stripeKey: process.env.STRIPE_PUBLISHABLE_KEY,
-    client_secret: intent.client_secret,
-  });
+app.get("/payment-intent", async function (req, res, next) {
+  try {
+    // Access the dynamic parameter
+    const intentId = req.query?.intentId;
+    console.log("intent id: ", intentId);
+    const stripe = require("stripe")(process.env.STRIPE_KEY);
+    const intent = await stripe.paymentIntents.retrieve(intentId);
+    res.render("pages/intent/payment", {
+      appUrl: process.env.APP_URL,
+      stripeKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      client_secret: intent.client_secret,
+    });
+  } catch (error) {
+    next(error); // Pass errors to the error handler
+  }
 });
 // https://fhs-dev-payments-ed0f47a43ff2.herokuapp.com/intent/pi_3MtwBwLkdIwHu7ix28a3tqPa
 /**
@@ -118,33 +122,6 @@ app.post("/update-payment-method", async (req, res) => {
   const subscriptionId = "sub_1PQOO6I0DGZ9CkPIVJDew7Nq";
 
   const stripe = require("stripe")(process.env.STRIPE_KEY);
-  try {
-    // Attach the new Payment Method to the customer
-    await stripe.paymentMethods.attach(paymentMethodId, {
-      customer: customerId,
-    });
-
-    // Update the customer's default invoice settings
-    await stripe.customers.update(customerId, {
-      invoice_settings: {
-        default_payment_method: paymentMethodId,
-      },
-    });
-
-    // Update the subscription to use the new Payment Method
-    await stripe.subscriptions.update(subscriptionId, {
-      default_payment_method: paymentMethodId,
-    });
-
-    res.status(200).send({ success: true });
-  } catch (error) {
-    res.status(400).send({ error: { message: error.message } });
-  }
-});
-
-app.post("/update-payment-method", async (req, res) => {
-  const { paymentMethodId, customerId, subscriptionId } = req.body;
-
   try {
     // Attach the new Payment Method to the customer
     await stripe.paymentMethods.attach(paymentMethodId, {
@@ -688,6 +665,15 @@ app.post(
     response.send();
   }
 );
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    message: "An internal error occurred",
+    error: err.message,
+  });
+});
 
 const port = process.env.PORT || 4242;
 
