@@ -78,6 +78,19 @@ app.get("/intent", async function (req, res) {
   });
 });
 
+// intent page
+app.get("/intent/:intentId", async function (req, res) {
+  // Access the dynamic parameter
+  const intentId = req.params.intentId;
+
+  const intent = await stripe.paymentIntents.retrieve(intentId);
+
+  res.render("pages/intent", {
+    appUrl: process.env.APP_URL,
+    client_secret: intent.client_secret,
+  });
+});
+
 /**
  * CUSTOMER
  */
@@ -90,6 +103,63 @@ app.post("/find-customer-details", upload.none(), async (req, res) => {
   // Set the status code to 200
   res.statusCode = 200;
   res.end(JSON.stringify({ result: customer_info }));
+});
+
+app.post("/update-payment-method", async (req, res) => {
+  const paymentMethodId = "pm_1PQmOTI0DGZ9CkPIZU97XsTH";
+  const customerId = "cus_QGwGs3rvbTA7VA";
+  const subscriptionId = "sub_1PQOO6I0DGZ9CkPIVJDew7Nq";
+
+  const stripe = require("stripe")(process.env.STRIPE_KEY);
+  try {
+    // Attach the new Payment Method to the customer
+    await stripe.paymentMethods.attach(paymentMethodId, {
+      customer: customerId,
+    });
+
+    // Update the customer's default invoice settings
+    await stripe.customers.update(customerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
+
+    // Update the subscription to use the new Payment Method
+    await stripe.subscriptions.update(subscriptionId, {
+      default_payment_method: paymentMethodId,
+    });
+
+    res.status(200).send({ success: true });
+  } catch (error) {
+    res.status(400).send({ error: { message: error.message } });
+  }
+});
+
+app.post("/update-payment-method", async (req, res) => {
+  const { paymentMethodId, customerId, subscriptionId } = req.body;
+
+  try {
+    // Attach the new Payment Method to the customer
+    await stripe.paymentMethods.attach(paymentMethodId, {
+      customer: customerId,
+    });
+
+    // Update the customer's default invoice settings
+    await stripe.customers.update(customerId, {
+      invoice_settings: {
+        default_payment_method: paymentMethodId,
+      },
+    });
+
+    // Update the subscription to use the new Payment Method
+    await stripe.subscriptions.update(subscriptionId, {
+      default_payment_method: paymentMethodId,
+    });
+
+    res.status(200).send({ success: true });
+  } catch (error) {
+    res.status(400).send({ error: { message: error.message } });
+  }
 });
 
 /**
@@ -124,7 +194,7 @@ app.post("/create-subscription", upload.none(), async (req, res) => {
     const today = new Date();
     const trialStartDate = new Date(today.setDate(today.getDate()));
     const trialStartTimestamp = Math.floor(trialStartDate.getTime() / 1000);
-    const trialEndDate = new Date(today.setDate(today.getDate() + trialDays));
+    const trialEndDate = new Date(today.setDate(today.getDate() + 30));
     const trialEndTimestamp = Math.floor(trialEndDate.getTime() / 1000);
     // Create a checkout session
     const session = await stripe.checkout.sessions.create({
@@ -132,26 +202,28 @@ app.post("/create-subscription", upload.none(), async (req, res) => {
       line_items: [
         {
           price: req.body.price_id,
+          // price: "price_1PQ89PI0DGZ9CkPIiVadWwqa", //req.body.price_id,
           quantity: 1,
         },
       ],
-      discounts: [
-        {
-          coupon: promoCode,
-        },
-      ],
+      // discounts: [
+      //   {
+      //     coupon: promoCode,
+      //   },
+      // ],
       customer_email: req.body.customer_email,
       // metadata: req.body.metadata,
       mode: "subscription",
       success_url: `${process.env.APP_URL}subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.APP_URL}subscription/cancel`,
       subscription_data: {
-        trial_period_days: 1,
-        trial_settings: {
-          end_behavior: {
-            missing_payment_method: "cancel", // Other options: 'create_invoice', 'pause'
-          },
-        },
+        billing_cycle_anchor: trialEndTimestamp,
+        // trial_period_days: 1,
+        // trial_settings: {
+        //   end_behavior: {
+        //     missing_payment_method: "cancel", // Other options: 'create_invoice', 'pause'
+        //   },
+        // },
       },
     });
     await subscription.syncSubscription(session, req.body);
@@ -232,6 +304,35 @@ app.post("/create-test-subscription", async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
+app.get(
+  "/subscription-action",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const stripe = require("stripe")(process.env.STRIPE_KEY);
+    // Assuming you have a customer ID and subscription ID
+    const customerId = "cus_QF3yq2zc6ydLvU";
+    const subscriptionId = "sub_1POZqrI0DGZ9CkPIaghnGBbN";
+
+    // Replace 'desired_billing_cycle_anchor' with the desired date for the billing cycle anchor
+    const desiredBillingCycleAnchor = Math.floor(Date.now() / 1000); // Current timestamp
+    console.log("desiredBillingCycleAnchor -- : ", desiredBillingCycleAnchor);
+    // Update the subscription with the new billing cycle anchor
+    stripe.subscriptions.update(
+      subscriptionId,
+      {
+        billing_cycle_anchor: "now",
+      },
+      (err, subscription) => {
+        if (err) {
+          console.error("Error updating subscription:", err);
+        } else {
+          console.log("Subscription updated successfully:", subscription);
+        }
+      }
+    );
+  }
+);
 
 app.get(
   "/products",
