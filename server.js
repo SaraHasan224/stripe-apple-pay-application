@@ -89,6 +89,9 @@ app.get("/payment-intent", async function (req, res, next) {
   try {
     // Access the dynamic parameter
     const intentId = req.query?.intent_id;
+    if (intentId == undefined) {
+      res.status(400).send({ error: { message: "Intent id is undefined" } });
+    }
     const stripe = require("stripe")(process.env.STRIPE_KEY);
     const intent = await stripe.paymentIntents.retrieve(intentId);
     res.render("pages/intent/payment", {
