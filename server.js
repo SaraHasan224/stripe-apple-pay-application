@@ -88,6 +88,7 @@ app.get("/subscription/cancel", function (req, res) {
 app.get("/payment-intent", async function (req, res) {
   // Access the dynamic parameter
   const intentId = req.query.intentId;
+  console.log("intent id: ", intentId);
   const stripe = require("stripe")(process.env.STRIPE_KEY);
   const intent = await stripe.paymentIntents.retrieve(intentId);
   res.render("pages/intent/payment", {
