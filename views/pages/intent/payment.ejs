@@ -43,7 +43,7 @@
   </body>
   <script>
     const clientSecret = "<%=client_secret%>";
-    const STRIPE_KEY = "<%=stripeKey%>";
+    const STRIPE_KEY = process.env.STRIPE_PUBLISHABLE_KEY;
   </script>
   <script src="../js/intent.js" defer></script>
 </html>

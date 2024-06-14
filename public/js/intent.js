@@ -1,4 +1,4 @@
-const stripe = Stripe(STRIPE_KEY);
+const stripe = Stripe(process.env.STRIPE_PUBLISHABLE_KEY);
 const elements = stripe.elements();
 const cardElement = elements.create("card");
 cardElement.mount("#card-element");
